@@ -1,10 +1,9 @@
 package mrfinference.tests
 
-import org.scalatest.FlatSpec
+import org.scalatest._
 import mrfinference.{Factor, Mrf}
 
-class MrfSpec extends FlatSpec {
-  
+class MrfSpec extends FlatSpec with Matchers{
   behavior of "The independent, uniform, and binary Mrf"
   
   val oneVarUniformFeature: Int=>Double = x => 1
@@ -17,10 +16,20 @@ class MrfSpec extends FlatSpec {
   
   val iUBMrf = new Mrf(iUBFactors, binaryDomain)
   
+  it should "have the right variable ids" in {
+    assert(iUBMrf.variables === Set(1,2,3,4))
+  }
+  
   it should "identify independence for all independence queries" in {
     assert(iUBMrf.checkIndependence(Set(1,2), Set(3,4), Set()) === true)
     assert(iUBMrf.checkIndependence(Set(1,3), Set(2), Set(4)) === true)
     assert(iUBMrf.checkIndependence(Set(4), Set(3,2), Set(1)) === true)
+  }
+  
+  it should "return marginalization queries accurate within 10^-5" in {
+    val iUBp1 = iUBMrf.marginalize(1)
+    iUBp1(0) should equal (0.50000 +- 0.00001)
+    iUBp1(1) should equal (0.50000 +- 0.00001)
   }
   
   behavior of "The 4-cycle, attractive, binary Mrf"
@@ -33,6 +42,10 @@ class MrfSpec extends FlatSpec {
   val fCFactors = Vector(fCFactor1, fCFactor2, fCFactor3, fCFactor4)
   
   val fCMrf = new Mrf(fCFactors, binaryDomain)
+  
+  it should "have the right variable ids" in {
+    assert(fCMrf.variables === Set(1,2,3,4))
+  }
   
   it should "identify independence for opposing corners when conditioned on the rest" in {
     assert(fCMrf.checkIndependence(Set(1), Set(3), Set(2,4)) === true)
@@ -54,27 +67,50 @@ class MrfSpec extends FlatSpec {
     assert(fCMrf.checkIndependence(Set(1,3), Set(2,3), Set()) === false)
   }
   
-  behavior of "The length-5-line, attractive, binary Mrf"
+  it should "return marginalization queries accurate within 10^-5" in {
+    val fCMrfp1 = fCMrf.marginalize(1)
+    fCMrfp1(0) should equal (0.50000 +- 0.00001)
+    fCMrfp1(1) should equal (0.50000 +- 0.00001)
+  }
   
-  val lFLFactor1 = Factor((1,2), attractiveFeature)
-  val lFLFactor2 = Factor((2,3), attractiveFeature)
-  val lFLFactor3 = Factor((3,4), attractiveFeature)
-  val lFLFactor4 = Factor((4,5), attractiveFeature)
-  val lFLFactors = Vector(lFLFactor1, lFLFactor2, lFLFactor3, lFLFactor4)
+  behavior of "The length-5-line, biased, attractive, binary Mrf"
+  val biasedAttractiveFeature: (Int, Int) => Double = (x,y) => {
+    val domain = Set(0,1)
+    if(!(domain contains x) || !(domain contains x)) 0.0
+    else if(x == y && x == 0) 2.0
+    else if(x == y && x == 1) 3
+    else 1.0
+  }
   
-  val lFLMrf = new Mrf(lFLFactors, binaryDomain)
+  val lFLBABFactor1 = Factor((1,2), biasedAttractiveFeature)
+  val lFLBABFactor2 = Factor((2,3), biasedAttractiveFeature)
+  val lFLBABFactor3 = Factor((3,4), biasedAttractiveFeature)
+  val lFLBABFactor4 = Factor((4,5), biasedAttractiveFeature)
+  val lFLBABFactors = Vector(lFLBABFactor1, lFLBABFactor2, lFLBABFactor3, lFLBABFactor4)
+  
+  val lFLBABMrf = new Mrf(lFLBABFactors, binaryDomain)
+  
+  it should "have the right variable ids" in {
+    assert(lFLBABMrf.variables === Set(1,2,3,4,5))
+  }
   
   it should "identify independencies when conditioned on a separating element" in {
-    assert(lFLMrf.checkIndependence(Set(4,5), Set(1,2), Set(3)) == true)
-    assert(lFLMrf.checkIndependence(Set(5), Set(2), Set(4)) == true)
-    assert(lFLMrf.checkIndependence(Set(1), Set(4), Set(2,3,5)) == true)
-    assert(lFLMrf.checkIndependence(Set(1,2,3), Set(5), Set(4)) == true)
+    assert(lFLBABMrf.checkIndependence(Set(4,5), Set(1,2), Set(3)) == true)
+    assert(lFLBABMrf.checkIndependence(Set(5), Set(2), Set(4)) == true)
+    assert(lFLBABMrf.checkIndependence(Set(1), Set(4), Set(2,3,5)) == true)
+    assert(lFLBABMrf.checkIndependence(Set(1,2,3), Set(5), Set(4)) == true)
   }
   
   it should "identify dependencies without conditioning on a separating element" in {
-    assert(lFLMrf.checkIndependence(Set(2,3), Set(5), Set(1)) == false)
-    assert(lFLMrf.checkIndependence(Set(3,4,5), Set(2), Set()) == false)
-    assert(lFLMrf.checkIndependence(Set(2), Set(3), Set(1,5)) == false)
-    assert(lFLMrf.checkIndependence(Set(4), Set(5,1), Set(2,3)) == false)
+    assert(lFLBABMrf.checkIndependence(Set(2,3), Set(5), Set(1)) == false)
+    assert(lFLBABMrf.checkIndependence(Set(3,4,5), Set(2), Set()) == false)
+    assert(lFLBABMrf.checkIndependence(Set(2), Set(3), Set(1,5)) == false)
+    assert(lFLBABMrf.checkIndependence(Set(4), Set(5,1), Set(2,3)) == false)
   }
+  it should "return marginalization queries accurate within 10^-5" in {
+    val lFLBABMrfp1 = lFLBABMrf.marginalize(2)
+    lFLBABMrfp1(0) should equal (0.32307 +- 0.00001)
+    lFLBABMrfp1(1) should equal (0.67692 +- 0.00001)
+  }
+  
 }

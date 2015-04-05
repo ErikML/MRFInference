@@ -12,6 +12,8 @@ class Mrf(val factors: Vector[Factor], val domain: Set[Int]) {
     * @return `true` if X is independent of Y given Z in every set of factors with equivalent
               scopes.
     */
+  
+  val variables: Set[Int] = this.factors.map(_.scope.toSet).reduce(_ | _)
   def checkIndependence(X: Set[Int], Y: Set[Int], Z: Set[Int]): Boolean = {
     // This algorithm works by recursively iterating over the factors. If the current factor has
     // both elements of X and Y then the algorithm returns `false`. If not but an element of X
@@ -36,6 +38,43 @@ class Mrf(val factors: Vector[Factor], val domain: Set[Int]) {
       }
     }
     recurCheckIndependence(X -- Z, Y -- Z, Z, this.factors)
+  }
+  
+  /** Uses variable elimination to find the marginals of an input variable. Returned as a Map from
+      the domain.
+    *
+    * @param x the variable to get the marginals of
+    */
+  def marginalize(x: Int): Map[Int, Double] = {
+    // This algorithm works by choosing a variable to be eliminated, creating a product factor of
+    // all factors that contain the chosen variable, and them summing the variable out. It then
+    // continues recursively. See [1][Section 9.2] for futher details.
+    @scala.annotation.tailrec
+    def recurMarginalize(x:Int, currFactors: Vector[Factor], varsToElim: Vector[Int]): Factor = {
+      // If all variables have been eliminated then the product of the remaining factors is what we
+      // need.
+      if (varsToElim.isEmpty) currFactors.reduce(Factor.productFactor(_,_)) else {
+        val elimVar = varsToElim.head
+        val factorsToMultiply = currFactors.filter(_.scope contains elimVar)
+        val productFactor = factorsToMultiply.reduce(Factor.productFactor(_,_))
+        val elimFactor = Factor.eliminatedVariableFactor(productFactor, elimVar, this.domain)
+        recurMarginalize(x, elimFactor +: currFactors.filterNot(_.scope contains elimVar), varsToElim.tail)
+      }
+    }
+    val finalFactor = recurMarginalize(x, this.factors, this.variables.filter(_ != x).toVector)
+    // Just need to normailize to get the marginals
+    val partitionFunction = this.domain.foldLeft(0.0){(acc, curr) => 
+      acc + finalFactor.feature(Vector(curr))
+    }
+    Map[Int, Double]() ++ this.domain.map(x => (x, finalFactor.feature(Vector(x)) / partitionFunction))
+  }
+}
+
+object MrfUtils {
+  val factorSizeAfterEliminationz: (Int, Vector[Factor]) => Int = (x, factors) => {
+    factors.map(f => f.scope.toSet).reduce { (acc, next) =>
+      if(next contains x) (acc | next) else acc
+    }.size-1
   }
 }
 /** Sources
